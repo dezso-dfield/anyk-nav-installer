@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Make scripts executable
+        run: |
+          chmod +x mac/*.command linux/*.sh
+
+      - name: Build release archives
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          # macOS bundle
+          zip -r "anyk-nav-installer-mac-${VERSION}.zip" \
+            mac/ README.md LICENSE
+
+          # Windows bundle
+          zip -r "anyk-nav-installer-windows-${VERSION}.zip" \
+            windows/ README.md LICENSE
+
+          # Linux bundle
+          zip -r "anyk-nav-installer-linux-${VERSION}.zip" \
+            linux/ README.md LICENSE
+
+          # All platforms (full bundle)
+          zip -r "anyk-nav-installer-all-platforms-${VERSION}.zip" \
+            mac/ windows/ linux/ README.md LICENSE
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          cat > release_notes.md << EOF
+          ## ÁNYK – NAV Installer ${VERSION}
+
+          One-click installer for Hungary's official NAV tax form software (ÁNYK / AbevJava).
+          Downloads directly from [nav.gov.hu](https://nav.gov.hu). Not affiliated with NAV.
+
+          ---
+
+          ### What's included
+
+          | File | Platform | Description |
+          |------|----------|-------------|
+          | \`anyk-nav-installer-mac-${VERSION}.zip\` | macOS | Apple Silicon + Intel |
+          | \`anyk-nav-installer-windows-${VERSION}.zip\` | Windows | Windows 10 / 11 (64-bit) |
+          | \`anyk-nav-installer-linux-${VERSION}.zip\` | Linux | x86_64 + ARM64 |
+          | \`anyk-nav-installer-all-platforms-${VERSION}.zip\` | All | All three platforms |
+
+          ---
+
+          ### Quick start
+
+          **macOS** — unzip, double-click \`anyk_manager.command\`
+          > If blocked: right-click → Open → Open Anyway
+
+          **Windows** — unzip, double-click \`anyk_manager.bat\`
+          > UAC prompt will appear once — click Yes
+
+          **Linux** — unzip, then:
+          \`\`\`bash
+          chmod +x anyk_manager.sh && ./anyk_manager.sh
+          \`\`\`
+
+          ---
+
+          ### What each manager does
+          - **Telepítés** — Install (downloads Java 8 + ÁNYK from NAV, patches config)
+          - **Frissítés** — Update (backs up your forms, updates, restores)
+          - **Eltávolítás** — Uninstall (removes ÁNYK + optionally Java 8)
+          - **Indítás** — Launch ÁNYK directly
+
+          ---
+
+          > ÁNYK is the official software of NAV (Nemzeti Adó- és Vámhivatal).
+          > This project is an unofficial installer wrapper. See [LICENSE](LICENSE) for details.
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "ÁNYK – NAV Installer ${{ steps.version.outputs.VERSION }}"
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          files: |
+            anyk-nav-installer-mac-${{ steps.version.outputs.VERSION }}.zip
+            anyk-nav-installer-windows-${{ steps.version.outputs.VERSION }}.zip
+            anyk-nav-installer-linux-${{ steps.version.outputs.VERSION }}.zip
+            anyk-nav-installer-all-platforms-${{ steps.version.outputs.VERSION }}.zip
